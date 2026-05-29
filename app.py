@@ -54,10 +54,6 @@ pwa_html = """
 # Render the script invisibly on your page layout
 components.html(pwa_html, height=0, width=0)
 
-# --- Your standard app code continues below ---
-st.title("🤖 My Streamlit Application")
-st.write("Open this page on your phone's browser to see the install option!")
-
 # --- Sidebar Configuration ---
 st.sidebar.header("Target Text Settings")
 st.sidebar.write("Modify the phrases below. Put each target phrase on a **new line**.")
