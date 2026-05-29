@@ -11,6 +11,53 @@ st.set_page_config(page_title="PDF Text Redactor", layout="centered")
 st.title("📄 Custom PDF Text Redactor")
 st.write("Upload your PDF files to permanently strip target text and watermarks.")
 
+import os
+import shutil
+import streamlit as st
+import streamlit.components.v1 as components
+
+# --- AUTOMATED PWA INJECTION LOGIC ---
+# This block copies your manifest and service worker into Streamlit's actual static frontend directory
+try:
+    # Locate where Streamlit is installed inside the server/container
+    streamlit_static_path = os.path.join(os.path.dirname(st.__file__), "static")
+    
+    # Paths to copy files into
+    manifest_dest = os.path.join(streamlit_static_path, "manifest.json")
+    sw_dest = os.path.join(streamlit_static_path, "sw.js")
+
+    # Only copy if they don't exist yet to protect server performance
+    if not os.path.exists(manifest_dest):
+        shutil.copy("pwa/manifest.json", manifest_dest)
+    if not os.path.exists(sw_dest):
+        shutil.copy("pwa/sw.js", sw_dest)
+except Exception as e:
+    print(f"PWA Injection setup warning: {e}")
+
+# --- HTML/JS Injection to trigger mobile installation ---
+pwa_html = """
+<script>
+    // 1. Inject Manifest Link into the parent website header
+    var link = window.parent.document.createElement('link');
+    link.rel = 'manifest';
+    link.href = './manifest.json';
+    window.parent.document.getElementsByTagName('head')[0].appendChild(link);
+
+    // 2. Register the Service Worker in the parent scope
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js')
+        .then(function(reg) { console.log('PWA Service Worker Registered Successfully', reg); })
+        .catch(function(err) { console.error('PWA Service Worker Failed', err); });
+    }
+</script>
+"""
+# Render the script invisibly on your page layout
+components.html(pwa_html, height=0, width=0)
+
+# --- Your standard app code continues below ---
+st.title("🤖 My Streamlit Application")
+st.write("Open this page on your phone's browser to see the install option!")
+
 # --- Sidebar Configuration ---
 st.sidebar.header("Target Text Settings")
 st.sidebar.write("Modify the phrases below. Put each target phrase on a **new line**.")
