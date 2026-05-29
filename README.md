@@ -4,7 +4,7 @@ A fast, lightweight, and completely free web-based utility designed to permanent
 
 Built specifically with students in mind to clean up cluttered study materials (like heavily watermarked JEE prep files) and improve readability.
 
-🚀 **[Click Here to Use the Live Web Application]([https://YOUR-APP-NAME.streamlit.app](https://pdfcleaner007.streamlit.app/))** *(Replace this with your actual Streamlit URL)*
+🚀 **[Click Here to Use the Live Web Application](https://pdfcleaner007.streamlit.app/)**
 
 ---
 
@@ -34,5 +34,5 @@ Make sure you have Python installed on your system.
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git)
-cd YOUR_REPOSITORY_NAME
+git clone https://github.com/ostrich2635/pdf_cleaner
+cd pdf_cleaner
