@@ -3,30 +3,50 @@ import fitz  # PyMuPDF
 import streamlit as st
 
 st.set_page_config(page_title="PDF Text Redactor", layout="centered")
-st.title("📄 PDF Text Redactor")
-st.write("Upload your PDF files, and they will be scrubbed automatically.")
+st.title("📄 Custom PDF Text Redactor")
+st.write("Upload your PDF files to permanently strip target text and watermarks.")
 
-# --- Configuration (Your target strings) ---
-TARGET_TEXTS = [
-    "Rankers  Academy  JEE",
-    "For More Material Join: @JEEAdvanced_2025",
-]
+# --- Sidebar Configuration ---
+st.sidebar.header("Target Text Settings")
+st.sidebar.write("Modify the phrases below. Put each target phrase on a **new line**.")
 
-# File Uploader component (allows multiple files)
+# Default phrases preset into the text area
+default_targets = (
+    "Rankers  Academy  JEE\n"
+    "For More Material Join: @JEEAdvanced_2025"
+)
+
+# Text area layout for user input
+user_input = st.sidebar.text_area(
+    "Texts to remove:", 
+    value=default_targets, 
+    height=150
+)
+
+# Split the input by lines and filter out empty inputs
+TARGET_TEXTS = [line.strip() for line in user_input.split("\n") if line.strip()]
+
+# Display active targets on main page
+if TARGET_TEXTS:
+    with st.expander("🔍 Currently actively searching for:", expanded=False):
+        for text in TARGET_TEXTS:
+            st.code(text)
+else:
+    st.warning("⚠️ No target text provided. The PDFs will not be altered.")
+
+# --- Main File Uploader ---
 uploaded_files = st.file_uploader(
     "Choose PDF files", type=["pdf"], accept_multiple_files=True
 )
 
-if uploaded_files:
+if uploaded_files and TARGET_TEXTS:
     st.write(f"### Processing {len(uploaded_files)} file(s):")
 
     for uploaded_file in uploaded_files:
-        # Read file into memory bytes
         file_bytes = uploaded_file.read()
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         total_instances = 0
 
-        # Run the redaction process
         for page_num in range(len(doc)):
             page = doc[page_num]
             page_modified = False
@@ -42,17 +62,17 @@ if uploaded_files:
             if page_modified:
                 page.apply_redactions()
 
-        # Save the edited PDF to a memory buffer instead of the hard drive
         output_buffer = io.BytesIO()
         doc.save(output_buffer)
         doc.close()
 
-        # UI Visuals for the user
+        # Download interface
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.success(
-                f"**{uploaded_file.name}** — Removed {total_instances} instances."
-            )
+            if total_instances > 0:
+                st.success(f"**{uploaded_file.name}** — Cleaned {total_instances} phrases.")
+            else:
+                st.info(f"**{uploaded_file.name}** — No target phrases found.")
         with col2:
             st.download_button(
                 label="📥 Download",
