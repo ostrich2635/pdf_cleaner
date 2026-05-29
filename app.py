@@ -60,7 +60,7 @@ st.sidebar.write("Modify the phrases below. Put each target phrase on a **new li
 
 default_targets = (
     "Rankers  Academy  JEE\n"
-    "For More Material Join: @JEEAdvanced_2025"
+    "For More Material Join: @JEEAdvanced_2025\n"
     "For More Join: @IITJEE_Advanced"
 )
 
