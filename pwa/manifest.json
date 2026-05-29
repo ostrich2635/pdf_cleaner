@@ -1,0 +1,17 @@
+{
+  "short_name": "PDFCleaner",
+  "name": "Telegram PDF Cleaner Bot Control",
+  "icons": [
+    {
+      "src": "https://cdn.esawebb.org/archives/images/screen/pillarsofcreation_composite.jpg",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#ff4b4b",
+  "display": "standalone",
+  "orientation": "portrait"
+}
