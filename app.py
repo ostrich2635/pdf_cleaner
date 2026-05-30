@@ -23,7 +23,7 @@ try:
         shutil.copy("pwa/manifest.json", manifest_dest)
     if not os.path.exists(sw_dest):
         shutil.copy("pwa/sw.js", sw_dest)
-except Exception as e:
+except Exception:
     pass
 
 pwa_html = """
@@ -171,29 +171,39 @@ if uploaded_files and TARGET_TEXTS:
                             
                             # Redact only if checked AND it is a PDF
                             if is_checked and path.lower().endswith('.pdf'):
-                                doc = fitz.open(stream=content, filetype="pdf")
-                                for page in doc:
-                                    page.clean_contents()
-                                    xrefs = page.get_contents()
-                                    if not xrefs:
-                                        continue
-                                    xref = xrefs[0]
-                                    stream = doc.xref_stream(xref)
-                                    if stream:
-                                        stream_modified = False
-                                        for target in TARGET_TEXTS:
-                                            target_bytes = target.encode("utf-8")
-                                            if target_bytes in stream:
-                                                blank_spaces = b" " * len(target_bytes)
-                                                stream = stream.replace(target_bytes, blank_spaces)
-                                                stream_modified = True
-                                        if stream_modified:
-                                            doc.update_stream(xref, stream)
-                                
-                                out_pdf_buffer = io.BytesIO()
-                                doc.save(out_pdf_buffer, garbage=4, deflate=True)
-                                doc.close()
-                                out_zip.writestr(path, out_pdf_buffer.getvalue())
+                                try:
+                                    doc = fitz.open(stream=content, filetype="pdf")
+                                    # Prevent crash on empty/corrupted 0-page PDFs
+                                    if doc.page_count > 0:
+                                        for page in doc:
+                                            page.clean_contents()
+                                            xrefs = page.get_contents()
+                                            if not xrefs:
+                                                continue
+                                            xref = xrefs[0]
+                                            stream = doc.xref_stream(xref)
+                                            if stream:
+                                                stream_modified = False
+                                                for target in TARGET_TEXTS:
+                                                    target_bytes = target.encode("utf-8")
+                                                    if target_bytes in stream:
+                                                        blank_spaces = b" " * len(target_bytes)
+                                                        stream = stream.replace(target_bytes, blank_spaces)
+                                                        stream_modified = True
+                                                if stream_modified:
+                                                    doc.update_stream(xref, stream)
+                                        
+                                        out_pdf_buffer = io.BytesIO()
+                                        doc.save(out_pdf_buffer, garbage=4, deflate=True)
+                                        doc.close()
+                                        out_zip.writestr(path, out_pdf_buffer.getvalue())
+                                    else:
+                                        # If it's a 0-page PDF, skip redaction and copy as-is
+                                        doc.close()
+                                        out_zip.writestr(path, content)
+                                except Exception:
+                                    # If PyMuPDF fails entirely to read it, copy as-is
+                                    out_zip.writestr(path, content)
                             else:
                                 # Copy un-checked PDFs and non-PDFs to output as-is
                                 out_zip.writestr(path, content)
@@ -213,48 +223,55 @@ if uploaded_files and TARGET_TEXTS:
         # --- ORIGINAL PDF PROCESSING ---
         elif uploaded_file.name.lower().endswith('.pdf'):
             st.write("---")
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            modifications_made = False
+            try:
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                modifications_made = False
 
-            for page in doc:
-                page.clean_contents()
-                xrefs = page.get_contents()
+                if doc.page_count > 0:
+                    for page in doc:
+                        page.clean_contents()
+                        xrefs = page.get_contents()
 
-                if not xrefs:
-                    continue
-                
-                xref = xrefs[0]
-                stream = doc.xref_stream(xref)
-                
-                if stream:
-                    stream_modified = False
-                    for target in TARGET_TEXTS:
-                        target_bytes = target.encode("utf-8")
+                        if not xrefs:
+                            continue
                         
-                        if target_bytes in stream:
-                            blank_spaces = b" " * len(target_bytes)
-                            stream = stream.replace(target_bytes, blank_spaces)
-                            stream_modified = True
-                            modifications_made = True
+                        xref = xrefs[0]
+                        stream = doc.xref_stream(xref)
+                        
+                        if stream:
+                            stream_modified = False
+                            for target in TARGET_TEXTS:
+                                target_bytes = target.encode("utf-8")
+                                
+                                if target_bytes in stream:
+                                    blank_spaces = b" " * len(target_bytes)
+                                    stream = stream.replace(target_bytes, blank_spaces)
+                                    stream_modified = True
+                                    modifications_made = True
 
-                    if stream_modified:
-                        doc.update_stream(xref, stream)
+                            if stream_modified:
+                                doc.update_stream(xref, stream)
 
-            output_buffer = io.BytesIO()
-            doc.save(output_buffer, garbage=4, deflate=True)
-            doc.close()
+                    output_buffer = io.BytesIO()
+                    doc.save(output_buffer, garbage=4, deflate=True)
+                    doc.close()
 
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                if modifications_made:
-                    st.success(f"**{uploaded_file.name}** — Cleaned successfully.")
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        if modifications_made:
+                            st.success(f"**{uploaded_file.name}** — Cleaned successfully.")
+                        else:
+                            st.info(f"**{uploaded_file.name}** — No target phrases found.")
+                    with col2:
+                        st.download_button(
+                            label="📥 Download",
+                            data=output_buffer.getvalue(),
+                            file_name=f"cleaned_{uploaded_file.name}",
+                            mime="application/pdf",
+                            key=uploaded_file.name,
+                        )
                 else:
-                    st.info(f"**{uploaded_file.name}** — No target phrases found.")
-            with col2:
-                st.download_button(
-                    label="📥 Download",
-                    data=output_buffer.getvalue(),
-                    file_name=f"cleaned_{uploaded_file.name}",
-                    mime="application/pdf",
-                    key=uploaded_file.name,
-                )
+                    doc.close()
+                    st.error(f"**{uploaded_file.name}** contains 0 pages and cannot be processed.")
+            except Exception as e:
+                st.error(f"Failed to process **{uploaded_file.name}**. It may be corrupted. Error: {e}")
