@@ -7,8 +7,6 @@ import zipfile
 import streamlit.components.v1 as components
 
 # --- CRITICAL FIX ---
-# This line silences the "MuPDF error: format error: cannot find object in xref" 
-# warnings that occur when processing poorly formatted PDFs.
 fitz.TOOLS.mupdf_display_errors(False)
 
 st.set_page_config(page_title="PDF Text Redactor", layout="centered")
@@ -26,7 +24,7 @@ try:
     if not os.path.exists(sw_dest):
         shutil.copy("pwa/sw.js", sw_dest)
 except Exception as e:
-    print(f"PWA Injection setup warning: {e}")
+    pass
 
 pwa_html = """
 <script>
@@ -37,8 +35,6 @@ pwa_html = """
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js')
-        .then(function(reg) { console.log('PWA Service Worker Registered Successfully', reg); })
-        .catch(function(err) { console.error('PWA Service Worker Failed', err); });
     }
 </script>
 """
@@ -71,13 +67,14 @@ def parse_zip(f_bytes):
     z_contents = {}
     with zipfile.ZipFile(io.BytesIO(f_bytes)) as z:
         for f in z.namelist():
-            if not f.endswith('/'):
-                z_contents[f] = z.read(f)
+            z_contents[f] = z.read(f)
     return z_contents
 
 def build_tree(paths):
     tree = {}
     for path in paths:
+        if path.endswith('/'):
+            continue  # Skip raw directory markers for the visual tree
         parts = path.split('/')
         curr = tree
         for part in parts[:-1]:
@@ -127,8 +124,7 @@ def render_tree(node, z_id, current_path=""):
             if val.lower().endswith('.pdf'):
                 st.checkbox(f"📄 {key}", key=file_key)
             else:
-                st.checkbox(f"📄 {key} (Will be copied as-is)", key=file_key)
-
+                st.checkbox(f"📄 {key} (Will be copied as-is)", key=file_key, disabled=True)
 
 # --- Main File Uploader ---
 uploaded_files = st.file_uploader(
@@ -147,12 +143,10 @@ if uploaded_files and TARGET_TEXTS:
             st.write(f"#### 📦 {uploaded_file.name}")
             
             zip_contents = parse_zip(file_bytes)
-            file_paths = list(zip_contents.keys())
             zip_id = uploaded_file.file_id
+            tree = build_tree(zip_contents.keys())
             
-            tree = build_tree(file_paths)
-            
-            st.write("**Select files to include in the output ZIP. PDFs will be processed automatically.**")
+            st.write("**Select the PDFs you want to redact. Unchecked PDFs and all non-PDF files will be included in the output ZIP exactly as they are.**")
             render_tree(tree, zip_id)
 
             btn_col, dl_col = st.columns([1, 1])
@@ -162,42 +156,48 @@ if uploaded_files and TARGET_TEXTS:
 
             if process_clicked:
                 st.session_state[f"processed_data_{zip_id}"] = None 
-                with st.spinner("Cleaning PDFs and rebuilding ZIP..."):
+                with st.spinner("Processing files and rebuilding ZIP..."):
                     output_zip_buffer = io.BytesIO()
                     with zipfile.ZipFile(output_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as out_zip:
                         for path, content in zip_contents.items():
-                            file_key = f"file_{zip_id}_{path}"
                             
-                            # Only include files that remain checked in the tree
-                            if st.session_state.get(file_key, True):
-                                if path.lower().endswith('.pdf'):
-                                    doc = fitz.open(stream=content, filetype="pdf")
-                                    for page in doc:
-                                        page.clean_contents()
-                                        xrefs = page.get_contents()
-                                        if not xrefs:
-                                            continue
-                                        xref = xrefs[0]
-                                        stream = doc.xref_stream(xref)
-                                        if stream:
-                                            stream_modified = False
-                                            for target in TARGET_TEXTS:
-                                                target_bytes = target.encode("utf-8")
-                                                if target_bytes in stream:
-                                                    blank_spaces = b" " * len(target_bytes)
-                                                    stream = stream.replace(target_bytes, blank_spaces)
-                                                    stream_modified = True
-                                            if stream_modified:
-                                                doc.update_stream(xref, stream)
-                                    
-                                    out_pdf_buffer = io.BytesIO()
-                                    doc.save(out_pdf_buffer, garbage=4, deflate=True)
-                                    doc.close()
-                                    out_zip.writestr(path, out_pdf_buffer.getvalue())
-                                else:
-                                    # Copy non-PDFs as-is
-                                    out_zip.writestr(path, content)
-                                    
+                            # Write directory structures exactly as they were
+                            if path.endswith('/'):
+                                out_zip.writestr(path, content)
+                                continue
+
+                            file_key = f"file_{zip_id}_{path}"
+                            is_checked = st.session_state.get(file_key, True)
+                            
+                            # Redact only if checked AND it is a PDF
+                            if is_checked and path.lower().endswith('.pdf'):
+                                doc = fitz.open(stream=content, filetype="pdf")
+                                for page in doc:
+                                    page.clean_contents()
+                                    xrefs = page.get_contents()
+                                    if not xrefs:
+                                        continue
+                                    xref = xrefs[0]
+                                    stream = doc.xref_stream(xref)
+                                    if stream:
+                                        stream_modified = False
+                                        for target in TARGET_TEXTS:
+                                            target_bytes = target.encode("utf-8")
+                                            if target_bytes in stream:
+                                                blank_spaces = b" " * len(target_bytes)
+                                                stream = stream.replace(target_bytes, blank_spaces)
+                                                stream_modified = True
+                                        if stream_modified:
+                                            doc.update_stream(xref, stream)
+                                
+                                out_pdf_buffer = io.BytesIO()
+                                doc.save(out_pdf_buffer, garbage=4, deflate=True)
+                                doc.close()
+                                out_zip.writestr(path, out_pdf_buffer.getvalue())
+                            else:
+                                # Copy un-checked PDFs and non-PDFs to output as-is
+                                out_zip.writestr(path, content)
+                                
                     st.session_state[f"processed_data_{zip_id}"] = output_zip_buffer.getvalue()
                     
             if st.session_state.get(f"processed_data_{zip_id}"):
