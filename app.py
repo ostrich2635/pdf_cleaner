@@ -266,7 +266,7 @@ if uploaded_files and TARGET_TEXTS:
                         st.download_button(
                             label="📥 Download",
                             data=output_buffer.getvalue(),
-                            file_name=f"cleaned_{uploaded_file.name}",
+                            file_name=f"{uploaded_file.name}",
                             mime="application/pdf",
                             key=uploaded_file.name,
                         )
