@@ -48,7 +48,9 @@ default_targets = (
     "Rankers  Academy  JEE\n"
     "For More Material Join: @JEEAdvanced_2025\n"
     "For More Join: @IITJEE_Advanced\n"
-    "For More Material Join: @JEEAdvanced_2024"
+    "For More Material Join: @JEEAdvanced_2024\n"
+    "TG ~ @bohring_bot\n"
+    "Downloaded from jeemain.guru"
 )
 
 user_input = st.sidebar.text_area("Texts to remove:", value=default_targets, height=150)
